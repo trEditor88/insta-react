@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DM 자동 공감 · 시뮬레이터</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css">
+<style>
+:root{
+  --canvas:#FFFFFF;--parchment:#F5F5F7;--ink:#1D1D1F;--muted:#6E6E73;
+  --border:#E0E0E0;--blue:#0066CC;--blue-focus:#0071E3;--green:#15803D;--red:#C0392B;
+  --tile-dark:#1D1D1F;--on-dark:#FFFFFF;--muted-dark:#CCCCCC;
+  --r-sm:8px;--r-md:11px;--r-lg:18px;--r-pill:9999px;
+  font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);line-height:1.6}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px}
+@media(min-width:768px){.wrap{padding:0 24px}}
+header{border-bottom:1px solid var(--border)}
+header .wrap{display:flex;align-items:center;justify-content:space-between;height:56px}
+header b{font-size:17px}
+.hero{background:var(--tile-dark);color:var(--on-dark);padding:clamp(48px,8vw,96px) 0}
+.hero h1{margin:0 0 12px;font-size:clamp(28px,5vw,48px);line-height:1.15;letter-spacing:-.02em}
+.hero p{margin:0;max-width:640px;color:var(--muted-dark);font-size:17px}
+section{padding:clamp(48px,8vw,96px) 0}
+section.alt{background:var(--parchment)}
+h2{margin:0 0 24px;font-size:clamp(22px,3vw,32px);letter-spacing:-.01em}
+h3{margin:0 0 8px;font-size:17px}
+.grid{display:grid;gap:24px;grid-template-columns:1fr}
+@media(min-width:900px){.grid.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.panel{background:var(--canvas);border:1px solid var(--border);border-radius:var(--r-lg);padding:24px}
+label{display:block;font-size:14px;font-weight:600;margin:16px 0 4px}
+label:first-child{margin-top:0}
+.hint{font-size:13px;color:var(--muted);margin:4px 0 0}
+input[type=text],input[type=number],select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-sm);font:inherit;background:#fff;color:var(--ink)}
+.row{display:flex;gap:12px;align-items:center}
+.row>*{flex:1}
+button{font:inherit;cursor:pointer;border-radius:var(--r-pill);padding:10px 20px;border:1px solid var(--blue);background:var(--blue);color:#fff;font-weight:600}
+button.ghost{background:#FAFAFC;color:var(--blue)}
+button:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--blue-focus);outline-offset:2px}
+.switch{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:15px}
+.switch input{width:18px;height:18px}
+.emojis{display:flex;gap:8px;flex-wrap:wrap}
+.emojis button{padding:6px 12px;font-size:20px;background:#FAFAFC;color:var(--ink);border-color:var(--border)}
+.emojis button[aria-pressed=true]{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue) inset}
+/* 채팅 */
+.chat{display:flex;flex-direction:column;height:460px;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:#fff}
+.chat-head{padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;display:flex;justify-content:space-between}
+.chat-body{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--parchment)}
+.msg{max-width:78%}
+.msg .who{font-size:12px;color:var(--muted);margin:0 8px 2px}
+.bubble{display:inline-block;padding:8px 14px;border-radius:var(--r-lg);background:#fff;border:1px solid var(--border);position:relative}
+.msg.me{align-self:flex-end;text-align:right}
+.msg.me .bubble{background:var(--blue);color:#fff;border-color:var(--blue)}
+.react{display:block;margin:-6px 0 0 10px;font-size:14px;background:#fff;border:1px solid var(--border);border-radius:var(--r-pill);padding:0 6px;width:max-content}
+.msg.pending .bubble{outline:1px dashed var(--blue);outline-offset:2px}
+.sim{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.sim select{flex:1;min-width:120px}
+.sim input{flex:2;min-width:140px}
+/* 로그 */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.stat{background:var(--parchment);border-radius:var(--r-md);padding:12px;text-align:center}
+.stat b{display:block;font-size:24px}
+.stat span{font-size:13px;color:var(--muted)}
+.log{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto;font-size:14px}
+.log li{padding:8px 0;border-bottom:1px solid var(--border)}
+.log .ok{color:var(--green)}.log .skip{color:var(--muted)}.log .no{color:var(--red)}
+.log time{color:var(--muted);margin-right:8px;font-variant-numeric:tabular-nums}
+/* 설계 */
+.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:16px}
+.steps li{counter-increment:s;padding-left:48px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:32px;height:32px;border-radius:50%;background:var(--tile-dark);color:#fff;display:grid;place-items:center;font-weight:700}
+code{background:#fff;border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:13px}
+.notice{border-left:4px solid var(--red);padding:12px 16px;background:#fff;margin-top:24px}
+a.dl{display:inline-block;background:var(--blue);color:#fff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:var(--r-pill)}
+footer{background:var(--tile-dark);color:var(--muted-dark);padding:32px 0;font-size:14px}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><b>DM 자동 공감</b><span class="hint">시뮬레이터 · 실제 인스타그램과 연결되지 않음</span></div></header>
+
+<main>
+<div class="hero"><div class="wrap">
+  <h1>지정한 사람의 DM에만<br>자동으로 공감 누르기</h1>
+  <p>규칙(누구에게·어떤 이모지·몇 초 뒤·하루 몇 번)을 정하고, 가짜 대화로 먼저 동작을 확인하는 설계용 웹사이트입니다.</p>
+</div></div>
+
+<section><div class="wrap">
+  <h2>1. 규칙 설정 & 시험</h2>
+  <div class="grid two">
+    <div class="panel">
+      <h3>규칙</h3>
+      <label for="targets">자동 공감할 사람 (아이디, 쉼표로 구분)</label>
+      <input type="text" id="targets" placeholder="friend_a, friend_b">
+      <p class="hint">여기에 없는 사람의 메시지에는 아무 일도 하지 않습니다.</p>
+
+      <label>공감 이모지</label>
+      <div class="emojis" id="emojis" role="group" aria-label="공감 이모지"></div>
+
+      <label>반응 지연 (초) — 사람처럼 보이게 무작위</label>
+      <div class="row">
+        <input type="number" id="dmin" min="1" max="600" aria-label="최소 지연">
+        <input type="number" id="dmax" min="1" max="600" aria-label="최대 지연">
+      </div>
+
+      <label for="cap">하루 최대 공감 수</label>
+      <input type="number" id="cap" min="1" max="500">
+
+      <label>활동 시간 (이 시간에만 동작)</label>
+      <div class="row">
+        <input type="number" id="hfrom" min="0" max="23" aria-label="시작 시">
+        <input type="number" id="hto" min="1" max="24" aria-label="끝 시">
+      </div>
+
+      <label class="switch"><input type="checkbox" id="skipKeywords"> 질문(?)이 들어간 메시지는 공감하지 않기</label>
+      <label class="switch"><input type="checkbox" id="on"> 자동 공감 켜기</label>
+    </div>
+
+    <div>
+      <div class="chat" aria-label="가짜 DM 대화">
+        <div class="chat-head"><span>시험 대화방</span><span class="hint" id="clock"></span></div>
+        <div class="chat-body" id="body" aria-live="polite"></div>
+      </div>
+      <div class="sim">
+        <select id="from" aria-label="보내는 사람"></select>
+        <input type="text" id="text" placeholder="메시지 입력" aria-label="메시지">
+        <button id="send">받기</button>
+      </div>
+      <p class="hint">"받기"를 누르면 그 사람이 메시지를 보낸 것처럼 처리합니다. 점선 테두리 = 공감 대기 중.</p>
+    </div>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <h2>2. 결과 기록</h2>
+  <div class="panel">
+    <div class="stats">
+      <div class="stat"><b id="sOk">0</b><span>공감함</span></div>
+      <div class="stat"><b id="sSkip">0</b><span>건너뜀</span></div>
+      <div class="stat"><b id="sLeft">0</b><span>오늘 남은 횟수</span></div>
+    </div>
+    <ul class="log" id="log"></ul>
+    <div class="row" style="margin-top:16px;justify-content:flex-start">
+      <button class="ghost" id="reset" style="flex:none">기록·대화 초기화</button>
+    </div>
+  </div>
+</div></section>
+
+<section><div class="wrap" style="max-width:800px">
+  <h2>3. 설계</h2>
+  <ol class="steps">
+    <li><h3>메시지 감지</h3>새 메시지가 오면 <code>보낸 사람</code>, <code>메시지 ID</code>, <code>내가 보낸 건지</code>를 읽는다.</li>
+    <li><h3>판정 (위에서부터 하나라도 걸리면 중단)</h3>
+      꺼짐 → 내 메시지 → 대상이 아님 → 이미 공감함(ID 기록) → 활동 시간 밖 → 하루 한도 초과 → 제외 조건(질문 등).</li>
+    <li><h3>지연 예약</h3>최소~최대 사이 무작위 초 뒤에 실행. 기다리는 동안 대화가 지워지면 취소.</li>
+    <li><h3>공감 실행</h3>선택한 이모지로 반응하고, 성공/실패와 이유를 기록에 남긴다.</li>
+    <li><h3>저장</h3>규칙·공감한 메시지 ID·오늘 횟수는 <code>localStorage</code>(나중엔 <code>chrome.storage</code>)에 저장, 날짜가 바뀌면 횟수 0.</li>
+  </ol>
+  <div class="notice">
+    <b>현실 제한</b><br>
+    일반 웹사이트는 인스타그램 DM을 읽거나 공감을 누를 수 없습니다(다른 사이트의 화면·로그인은 브라우저가 막고, 개인 DM용 공식 API도 없음).
+    그래서 이 페이지는 <b>규칙 로직을 검증하는 시뮬레이터</b>이고, 실제 연결은 인스타그램 페이지 안에서 도는 방식이 따로 필요합니다.
+    또 자동화는 인스타그램 약관에 어긋나 계정 제한 위험이 있어, 지연·하루 한도를 둔 것입니다.
+  </div>
+</div></section>
+<section class="alt"><div class="wrap" style="max-width:800px">
+  <h2>4. 확장프로그램 내려받기</h2>
+  <div class="panel">
+    <p style="margin-top:0">위 규칙을 실제 인스타그램 DM에서 쓰는 개인용 크롬 확장프로그램입니다.</p>
+    <a class="dl" href="dm-auto-react-extension.zip" download>확장프로그램 받기 (.zip · 약 8KB)</a>
+    <ol style="padding-left:20px;margin:16px 0 0">
+      <li>zip 파일을 받아 <b>압축을 풉니다</b>.</li>
+      <li>크롬 주소창에 <code>chrome://extensions</code> → 오른쪽 위 <b>개발자 모드</b> 켜기.</li>
+      <li><b>압축해제된 확장 프로그램을 로드합니다</b> → 압축 푼 폴더 선택.</li>
+      <li>인스타그램 탭을 새로고침한 뒤, 확장 아이콘에서 규칙을 정하고 <b>켜기</b>.</li>
+    </ol>
+    <p class="hint">웹스토어 확장이 아니라 직접 불러오는 방식이라 크롬이 "개발자 모드" 경고를 띄울 수 있습니다. 부계정으로 먼저 시험하세요.</p>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">설계용 프로토타입 · 데이터는 이 브라우저에만 저장됩니다.</div></footer>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY='insta-react:v1';
+const FRIENDS=['friend_a','friend_b','friend_c'];
+const EMOJIS=['❤️','😂','👍','😮','😢','🔥'];
+const def={targets:'friend_a',emoji:'❤️',dmin:2,dmax:5,cap:20,hfrom:0,hto:24,skipQ:false,on:true,msgs:[],log:[],day:'',count:0,ok:0,skip:0};
+let S=Object.assign({},def,JSON.parse(localStorage.getItem(KEY)||'{}'));
+const save=()=>localStorage.setItem(KEY,JSON.stringify(S));
+const today=()=>new Date().toISOString().slice(0,10);
+const hhmm=()=>new Date().toTimeString().slice(0,8);
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const timers={};
+
+function rollDay(){if(S.day!==today()){S.day=today();S.count=0;save()}}
+function targets(){return S.targets.split(',').map(s=>s.trim().replace(/^@/,'').toLowerCase()).filter(Boolean)}
+function addLog(kind,t){S.log.unshift({k:kind,t,time:hhmm()});S.log=S.log.slice(0,100);if(kind==='ok')S.ok++;else S.skip++;save();render()}
+
+/* 판정: 공감해야 하면 null, 아니면 건너뛰는 이유 */
+function decide(m){
+  if(!S.on)return'자동 공감이 꺼져 있음';
+  if(m.me)return'내가 보낸 메시지';
+  if(!targets().includes(m.from.toLowerCase()))return'대상이 아닌 사람';
+  if(m.reacted)return'이미 공감함';
+  const h=new Date().getHours();
+  if(h<S.hfrom||h>=S.hto)return'활동 시간 밖';
+  if(S.count>=S.cap)return'하루 한도 초과';
+  if(S.skipQ&&/[?？]/.test(m.text))return'질문이라 제외';
+  return null;
+}
+
+function receive(from,text){
+  const m={id:Date.now()+Math.random(),from,text,me:false,reacted:'',pending:false};
+  S.msgs.push(m);
+  const why=decide(m);
+  if(why){addLog('skip',`${from}: "${text}" → ${why}`);return}
+  const lo=Math.min(S.dmin,S.dmax),hi=Math.max(S.dmin,S.dmax);
+  const wait=lo+Math.random()*(hi-lo);
+  m.pending=true;S.count++;save();render();
+  timers[m.id]=setTimeout(()=>doReact(m.id),wait*1000);
+}
+function doReact(id){
+  const m=S.msgs.find(x=>x.id===id);delete timers[id];
+  if(!m)return;             // 대화가 지워졌으면 취소
+  m.pending=false;m.reacted=S.emoji;save();
+  addLog('ok',`${m.from}: "${m.text}" → ${S.emoji} 공감`);
+}
+
+function render(){
+  rollDay();
+  $('body').innerHTML=S.msgs.map(m=>`<div class="msg ${m.me?'me':''} ${m.pending?'pending':''}">
+    <div class="who">${m.me?'나':esc(m.from)}</div><span class="bubble">${esc(m.text)}</span>
+    ${m.reacted?`<span class="react" aria-label="공감 ${m.reacted}">${m.reacted}</span>`:''}</div>`).join('')
+    ||'<p class="hint" style="margin:auto">아래에서 메시지를 받아 보세요.</p>';
+  $('body').scrollTop=1e9;
+  $('log').innerHTML=S.log.map(l=>`<li class="${l.k}"><time>${l.time}</time>${l.k==='ok'?'✔ ':'– '}${esc(l.t)}</li>`).join('')||'<li class="skip">아직 기록이 없습니다.</li>';
+  $('sOk').textContent=S.ok;$('sSkip').textContent=S.skip;$('sLeft').textContent=Math.max(0,S.cap-S.count);
+  document.querySelectorAll('#emojis button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.e===S.emoji));
+}
+
+/* 초기화 */
+$('emojis').innerHTML=EMOJIS.map(e=>`<button type="button" data-e="${e}" aria-pressed="false">${e}</button>`).join('');
+$('emojis').onclick=e=>{const b=e.target.closest('button');if(b){S.emoji=b.dataset.e;save();render()}};
+const bind=(id,key,type)=>{const el=$(id);
+  if(type==='bool')el.checked=S[key];else el.value=S[key];
+  el.oninput=()=>{S[key]=type==='bool'?el.checked:type==='num'?Math.max(0,+el.value||0):el.value;save();render();if(key==='targets')fillFrom()}};
+bind('targets','targets');bind('dmin','dmin','num');bind('dmax','dmax','num');bind('cap','cap','num');
+bind('hfrom','hfrom','num');bind('hto','hto','num');bind('skipKeywords','skipQ','bool');bind('on','on','bool');
+function fillFrom(){
+  const names=[...new Set([...targets(),...FRIENDS])];const cur=$('from').value;
+  $('from').innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');if(names.includes(cur))$('from').value=cur;
+}
+fillFrom();
+$('send').onclick=()=>{const t=$('text').value.trim();if(!t)return;receive($('from').value,t);$('text').value='';$('text').focus()};
+$('text').onkeydown=e=>{if(e.key==='Enter')$('send').click()};
+$('reset').onclick=()=>{Object.values(timers).forEach(clearTimeout);S.msgs=[];S.log=[];S.ok=0;S.skip=0;S.count=0;save();render()};
+setInterval(()=>$('clock').textContent=hhmm(),1000);
+S.msgs.forEach(m=>{m.pending=false});   // 새로고침 시 대기 중이던 건 취소
+render();
+</script>
+</body>
+</html>
